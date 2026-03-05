@@ -74,9 +74,9 @@ func (s *Server) ListQueues(ctx context.Context, req *cloudtaskspb.ListQueuesReq
 	}
 
 	repo := queues.NewRepository(s.db.Conn())
-	list, err := repo.List(project, location)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+	list, listErr := repo.List(project, location)
+	if listErr != nil {
+		return nil, status.Error(codes.Internal, listErr.Error())
 	}
 
 	pbQueues := make([]*cloudtaskspb.Queue, len(list))
@@ -188,7 +188,8 @@ func (s *Server) CreateTask(ctx context.Context, req *cloudtaskspb.CreateTaskReq
 
 	queueID := "projects/" + project + "/locations/" + location + "/queues/" + queueName
 	queueRepo := queues.NewRepository(s.db.Conn())
-	q, err := queueRepo.Get(queueID)
+	var q *queues.Queue
+	q, err = queueRepo.Get(queueID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
