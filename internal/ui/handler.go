@@ -53,7 +53,7 @@ func (h *Handler) ListQueues(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	h.templates.ExecuteTemplate(w, "queues.html", &queuesPageData{
+	_ = h.templates.ExecuteTemplate(w, "queues.html", &queuesPageData{
 		Queues: list,
 		Error:  r.URL.Query().Get("error"),
 	})
@@ -112,7 +112,7 @@ func (h *Handler) QueueDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	h.templates.ExecuteTemplate(w, "queue_detail.html", &queueDetailData{
+	_ = h.templates.ExecuteTemplate(w, "queue_detail.html", &queueDetailData{
 		Queue:        q,
 		Tasks:        taskList,
 		StatusFilter: statusFilter,

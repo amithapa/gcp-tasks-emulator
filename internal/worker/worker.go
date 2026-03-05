@@ -124,7 +124,7 @@ func (w *Worker) dispatch(t *tasks.Task) {
 
 func (w *Worker) failTask(repo *tasks.Repository, t *tasks.Task, errMsg string) {
 	if t.RetryCount >= t.MaxRetries {
-		repo.UpdateStatus(t.ID, tasks.StatusFailed, errMsg)
+		_ = repo.UpdateStatus(t.ID, tasks.StatusFailed, errMsg)
 		slog.Info("task failed permanently", "task", t.ID, "error", errMsg)
 	} else {
 		w.retryOrFail(repo, t, errMsg)
@@ -134,7 +134,7 @@ func (w *Worker) failTask(repo *tasks.Repository, t *tasks.Task, errMsg string) 
 func (w *Worker) retryOrFail(repo *tasks.Repository, t *tasks.Task, errMsg string) {
 	nextRetry := t.RetryCount + 1
 	if nextRetry > t.MaxRetries {
-		repo.UpdateStatus(t.ID, tasks.StatusFailed, errMsg)
+		_ = repo.UpdateStatus(t.ID, tasks.StatusFailed, errMsg)
 		slog.Info("task failed permanently", "task", t.ID, "error", errMsg)
 		return
 	}

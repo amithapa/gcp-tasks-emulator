@@ -53,14 +53,6 @@ func parseParent(parent string) (project, location string, err error) {
 	return parts[1], parts[3], nil
 }
 
-func parseQueueName(name string) (project, location, queue string, err error) {
-	parts := strings.Split(name, "/")
-	if len(parts) < 6 || parts[0] != "projects" || parts[2] != "locations" || parts[4] != "queues" {
-		return "", "", "", fmt.Errorf("invalid queue name: %s", name)
-	}
-	return parts[1], parts[3], parts[5], nil
-}
-
 func parseTaskParent(parent string) (project, location, queue string, err error) {
 	parts := strings.Split(parent, "/")
 	if len(parts) < 6 || parts[0] != "projects" || parts[2] != "locations" || parts[4] != "queues" {

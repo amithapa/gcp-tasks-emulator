@@ -6,13 +6,12 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-  disable:
-    - deadcode
-    - varcheck
 
 linters-settings:
   govet:
     enable-all: true
+    disable:
+      - fieldalignment
 
 issues:
   exclude-rules:
