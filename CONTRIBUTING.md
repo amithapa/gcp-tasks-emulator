@@ -21,7 +21,8 @@ make test         # Run tests
 make build        # Build binary
 make docker       # Build Docker image
 make install-hooks      # Install pre-commit hooks (runs fmt, lint, test on commit)
-make release-snapshot  # Test release build locally (before tagging)
+make release-snapshot        # Test release (Linux only - requires native Go)
+make release-snapshot-docker # Test release in Docker (use on Mac/Windows - matches CI)
 ```
 
 ### Pre-commit Hooks
