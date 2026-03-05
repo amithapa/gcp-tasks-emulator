@@ -20,7 +20,8 @@ make run          # Start the emulator
 make test         # Run tests
 make build        # Build binary
 make docker       # Build Docker image
-make install-hooks # Install pre-commit hooks (runs fmt, lint, test on commit)
+make install-hooks      # Install pre-commit hooks (runs fmt, lint, test on commit)
+make release-snapshot  # Test release build locally (before tagging)
 ```
 
 ### Pre-commit Hooks
