@@ -1,4 +1,4 @@
-.PHONY: run build docker test lint clean
+.PHONY: run build docker test lint clean install-hooks
 
 run:
 	go run ./cmd/server
@@ -21,3 +21,8 @@ lint:
 
 clean:
 	rm -f cloud-tasks-emulator tasks.db
+
+install-hooks:
+	@command -v pre-commit >/dev/null 2>&1 || { echo "Install pre-commit: pip install pre-commit  OR  brew install pre-commit"; exit 1; }
+	pre-commit install
+	@echo "Pre-commit hooks installed. They will run on 'git commit'."

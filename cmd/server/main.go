@@ -28,7 +28,8 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	database, err := db.New(cfg.DatabasePath)
+	var database *db.DB
+	database, err = db.New(cfg.DatabasePath)
 	if err != nil {
 		slog.Error("failed to initialize database", "error", err)
 		os.Exit(1)

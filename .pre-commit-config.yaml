@@ -1,0 +1,24 @@
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+# See https://pre-commit.com
+
+repos:
+  - repo: local
+    hooks:
+      - id: go-fmt
+        name: go fmt
+        entry: go fmt ./...
+        language: system
+        pass_filenames: false
+
+      - id: go-vet
+        name: go vet
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && go vet ./...'
+        language: system
+        pass_filenames: false
+
+      - id: go-test
+        name: go test
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && go test ./...'
+        language: system
+        pass_filenames: false

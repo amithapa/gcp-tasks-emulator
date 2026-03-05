@@ -88,8 +88,8 @@ func (h *Handler) CreateQueue(w http.ResponseWriter, r *http.Request) {
 }
 
 type queueDetailData struct {
-	Queue   *queues.Queue
-	Tasks   []*tasks.Task
+	Queue        *queues.Queue
+	Tasks        []*tasks.Task
 	StatusFilter string
 }
 
@@ -107,9 +107,9 @@ func (h *Handler) QueueDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	statusFilter := r.URL.Query().Get("status")
 	taskRepo := tasks.NewRepository(h.db.Conn())
-	taskList, err := taskRepo.List(queueID, statusFilter)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	taskList, listErr := taskRepo.List(queueID, statusFilter)
+	if listErr != nil {
+		http.Error(w, listErr.Error(), http.StatusInternalServerError)
 		return
 	}
 	_ = h.templates.ExecuteTemplate(w, "queue_detail.html", &queueDetailData{

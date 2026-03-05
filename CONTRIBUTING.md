@@ -20,6 +20,16 @@ make run          # Start the emulator
 make test         # Run tests
 make build        # Build binary
 make docker       # Build Docker image
+make install-hooks # Install pre-commit hooks (runs fmt, lint, test on commit)
+```
+
+### Pre-commit Hooks
+
+To run `go fmt`, `golangci-lint`, and `go test` automatically before each commit:
+
+```bash
+# Install pre-commit (one-time): pip install pre-commit  OR  brew install pre-commit
+make install-hooks
 ```
 
 ## Code Style
