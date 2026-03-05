@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Queues - Cloud Tasks Emulator</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; max-width: 98%; margin: 0 auto; padding: 1rem 1.5rem; }
+        h1 { color: #1a73e8; margin-bottom: 0.5rem; }
+        .subtitle { color: #5f6368; margin-bottom: 2rem; }
+        .error { background: #fce8e6; color: #c5221f; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #dadce0; }
+        th { background: #f8f9fa; font-weight: 600; }
+        a { color: #1a73e8; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .btn { display: inline-block; padding: 0.5rem 1rem; background: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: #1557b0; }
+        .btn-danger { background: #ea4335; }
+        .btn-danger:hover { background: #c5221f; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        form { display: flex; gap: 0.5rem; margin-bottom: 2rem; flex-wrap: wrap; align-items: flex-end; }
+        input { padding: 0.5rem; border: 1px solid #dadce0; border-radius: 4px; }
+        input[type="text"] { min-width: 150px; }
+        .actions { display: flex; gap: 0.5rem; }
+    </style>
+</head>
+<body>
+    <h1>Cloud Tasks Emulator</h1>
+    <p class="subtitle">Queue Management</p>
+
+    {{if .Error}}
+    <div class="error">{{.Error}}</div>
+    {{end}}
+
+    <form method="POST" action="/ui/queues">
+        <input type="text" name="project" placeholder="Project" value="local-project">
+        <input type="text" name="location" placeholder="Location" value="us-central1">
+        <input type="text" name="name" placeholder="Queue name" required>
+        <button type="submit" class="btn">Create Queue</button>
+    </form>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Queues}}
+            <tr>
+                <td><a href="/ui/queue?queue={{urlquery .ID}}">{{.Name}}</a></td>
+                <td>
+                    <a href="/ui/queue?queue={{urlquery .ID}}" class="btn btn-sm">View Tasks</a>
+                    <form method="POST" action="/ui/queue/delete" style="display:inline;margin:0;">
+                        <input type="hidden" name="queue" value="{{.ID}}">
+                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this queue?')">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {{else}}
+            <tr><td colspan="2">No queues. Create one above.</td></tr>
+            {{end}}
+        </tbody>
+    </table>
+</body>
+</html>

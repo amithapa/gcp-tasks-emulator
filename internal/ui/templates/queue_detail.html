@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Queue.Name}} - Cloud Tasks Emulator</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; max-width: 98%; margin: 0 auto; padding: 1rem 1.5rem; }
+        h1 { color: #1a73e8; margin-bottom: 0.5rem; font-size: 1.25rem; }
+        a { color: #1a73e8; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #dadce0; font-size: 0.875rem; }
+        th { background: #f8f9fa; font-weight: 600; }
+        .btn { display: inline-block; padding: 0.5rem 1rem; background: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: #1557b0; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .status { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+        .status-PENDING { background: #e8f0fe; color: #1967d2; }
+        .status-RUNNING { background: #fef7e0; color: #b06000; }
+        .status-COMPLETED { background: #e6f4ea; color: #137333; }
+        .status-FAILED { background: #fce8e6; color: #c5221f; }
+        .filters { margin: 1rem 0; }
+        .filters a { margin-right: 0.5rem; padding: 0.25rem 0.5rem; }
+        .filters a.active { font-weight: 600; }
+        .task-toggle { cursor: pointer; color: #1a73e8; }
+        .task-toggle:hover { text-decoration: underline; }
+        .modal { position: fixed; inset: 0; z-index: 1000; display: none; align-items: center; justify-content: center; padding: 2rem; }
+        .modal.open { display: flex; }
+        .modal-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); cursor: pointer; }
+        .modal-content { position: relative; background: white; border-radius: 8px; max-width: 600px; max-height: 80vh; width: 100%; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; border-bottom: 1px solid #dadce0; }
+        .modal-header h3 { margin: 0; font-size: 1rem; }
+        .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #5f6368; line-height: 1; padding: 0 0.25rem; }
+        .modal-close:hover { color: #1a73e8; }
+        .modal-body { padding: 1.25rem; overflow-y: auto; max-height: 60vh; }
+        .modal-body .label { font-weight: 600; color: #5f6368; font-size: 0.75rem; margin-top: 1rem; }
+        .modal-body .label:first-child { margin-top: 0; }
+        .modal-body pre { margin: 0.5rem 0 0; font-size: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; background: #f8f9fa; padding: 0.75rem; border-radius: 4px; }
+        .modal-body pre.error-text { background: #fce8e6; color: #c5221f; }
+    </style>
+</head>
+<body>
+    <p><a href="/ui/queues">← Back to Queues</a></p>
+    <h1>Queue: {{.Queue.Name}}</h1>
+
+    <div class="filters">
+        Filter:
+        <a href="/ui/queue?queue={{urlquery .Queue.ID}}" {{if not .StatusFilter}}class="active"{{end}}>All</a>
+        <a href="/ui/queue?queue={{urlquery .Queue.ID}}&status=PENDING" {{if eq .StatusFilter "PENDING"}}class="active"{{end}}>Pending</a>
+        <a href="/ui/queue?queue={{urlquery .Queue.ID}}&status=RUNNING" {{if eq .StatusFilter "RUNNING"}}class="active"{{end}}>Running</a>
+        <a href="/ui/queue?queue={{urlquery .Queue.ID}}&status=COMPLETED" {{if eq .StatusFilter "COMPLETED"}}class="active"{{end}}>Completed</a>
+        <a href="/ui/queue?queue={{urlquery .Queue.ID}}&status=FAILED" {{if eq .StatusFilter "FAILED"}}class="active"{{end}}>Failed</a>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Task ID</th>
+                <th>Status</th>
+                <th>Method</th>
+                <th>Scheduled for</th>
+                <th>URL</th>
+                <th>Retries</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Tasks}}
+            <tr>
+                <td><span class="task-toggle" data-task-id="{{taskId .Name}}" title="Click to view payload and headers"><code>{{taskId .Name}}</code></span></td>
+                <td><span class="status status-{{.Status}}">{{.Status}}</span></td>
+                <td><code>{{if .HTTPMethod}}{{.HTTPMethod}}{{else}}POST{{end}}</code></td>
+                <td><span class="scheduled-time" data-epoch-ms="{{.NextAttemptAt.UnixMilli}}"></span></td>
+                <td>{{.URL}}</td>
+                <td>{{.RetryCount}}/{{.MaxRetries}}</td>
+                <td>
+                    {{if or (eq .Status "PENDING") (eq .Status "FAILED")}}
+                    <form method="POST" action="/ui/queue/tasks/run" style="display:inline;">
+                        <input type="hidden" name="queue" value="{{$.Queue.ID}}">
+                        <input type="hidden" name="task" value="{{taskId .Name}}">
+                        <button type="submit" class="btn btn-sm">Run Now</button>
+                    </form>
+                    {{if eq .Status "FAILED"}}
+                    <form method="POST" action="/ui/queue/tasks/retry" style="display:inline;">
+                        <input type="hidden" name="queue" value="{{$.Queue.ID}}">
+                        <input type="hidden" name="task" value="{{taskId .Name}}">
+                        <button type="submit" class="btn btn-sm">Retry</button>
+                    </form>
+                    {{end}}
+                    {{end}}
+                </td>
+            </tr>
+            {{else}}
+            <tr><td colspan="7">No tasks in this queue.</td></tr>
+            {{end}}
+        </tbody>
+    </table>
+
+    {{range .Tasks}}
+    <div id="task-content-{{taskId .Name}}" style="display:none">
+        {{if .LastError}}
+        <div class="label">Last error</div>
+        <pre class="error-text">{{.LastError}}</pre>
+        {{end}}
+        {{if .Body}}
+        <div class="label">Payload</div>
+        <pre>{{printf "%s" .Body}}</pre>
+        {{end}}
+        {{if .Headers}}
+        <div class="label">Headers</div>
+        <pre>{{range $k, $v := .Headers}}{{$k}}: {{$v}}
+{{end}}</pre>
+        {{end}}
+        {{if and (not .Body) (not .Headers) (not .LastError)}}
+        <span class="label">No payload, headers, or error info</span>
+        {{end}}
+    </div>
+    {{end}}
+
+    <div id="task-modal" class="modal">
+        <div class="modal-overlay" onclick="closeTaskModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Task details</h3>
+                <button class="modal-close" onclick="closeTaskModal()" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+
+    <script>
+        document.querySelectorAll('.scheduled-time').forEach(function(el) {
+            const ms = parseInt(el.getAttribute('data-epoch-ms'), 10);
+            if (!isNaN(ms)) el.textContent = new Date(ms).toLocaleString();
+        });
+        document.querySelectorAll('.task-toggle').forEach(function(el) {
+            el.addEventListener('click', function() {
+                const taskId = this.getAttribute('data-task-id');
+                const content = document.getElementById('task-content-' + taskId);
+                if (content) {
+                    document.getElementById('modal-body').innerHTML = content.innerHTML;
+                    document.getElementById('task-modal').classList.add('open');
+                    document.body.style.overflow = 'hidden';
+                }
+            });
+        });
+        function closeTaskModal() {
+            document.getElementById('task-modal').classList.remove('open');
+            document.body.style.overflow = '';
+        }
+        document.querySelector('.modal-overlay').addEventListener('click', closeTaskModal);
+        document.querySelector('.modal-close').addEventListener('click', closeTaskModal);
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeTaskModal();
+        });
+    </script>
+</body>
+</html>
