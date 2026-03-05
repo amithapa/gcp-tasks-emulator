@@ -16,7 +16,6 @@ builds:
       - windows
     goarch:
       - amd64
-      - arm64
     ldflags:
       - -s -w
 
@@ -35,6 +34,15 @@ archives:
 
 checksum:
   name_template: 'checksums.txt'
+
+dockers:
+  - dockerfile: Dockerfile.release
+    image_templates:
+      - ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}
+      - ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest
+    use: buildx
+    goos: linux
+    goarch: amd64
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"

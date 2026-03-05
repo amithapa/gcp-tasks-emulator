@@ -1,0 +1,17 @@
+# Minimal image for GoReleaser - copies pre-built binary
+FROM alpine:3.19
+
+RUN adduser -D -g '' appuser
+
+WORKDIR /app
+
+COPY cloud-tasks-emulator .
+RUN mkdir -p /app/data && chown -R appuser:appuser /app
+
+USER appuser
+
+ENV DATABASE_PATH=/app/data/tasks.db
+
+EXPOSE 8085 9090
+
+ENTRYPOINT ["./cloud-tasks-emulator"]
