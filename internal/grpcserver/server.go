@@ -15,6 +15,7 @@ import (
 	"cloud-tasks-emulator/internal/queues"
 	"cloud-tasks-emulator/internal/tasks"
 	"cloud.google.com/go/cloudtasks/apiv2/cloudtaskspb"
+	"cloud.google.com/go/scheduler/apiv1/schedulerpb"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -41,6 +42,7 @@ func (s *Server) Run(ctx context.Context, addr string) error {
 	}
 	grpcServer := grpc.NewServer()
 	cloudtaskspb.RegisterCloudTasksServer(grpcServer, s)
+	schedulerpb.RegisterCloudSchedulerServer(grpcServer, NewSchedulerServer(s.db))
 	go func() {
 		<-ctx.Done()
 		grpcServer.GracefulStop()

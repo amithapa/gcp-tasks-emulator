@@ -13,6 +13,7 @@ import (
 	"cloud-tasks-emulator/internal/config"
 	"cloud-tasks-emulator/internal/db"
 	"cloud-tasks-emulator/internal/grpcserver"
+	"cloud-tasks-emulator/internal/scheduler"
 	"cloud-tasks-emulator/internal/worker"
 )
 
@@ -41,6 +42,12 @@ func main() {
 
 	wrk := worker.New(database, cfg)
 	go wrk.Run(ctx)
+
+	var schedRunner *scheduler.Runner
+	if cfg.SchedulerEnabled {
+		schedRunner = scheduler.NewRunner(scheduler.ForDB(database.Conn()), time.Duration(cfg.SchedulerPollIntervalMs)*time.Millisecond)
+		go schedRunner.Run(ctx)
+	}
 
 	grpcSrv := grpcserver.New(database, cfg)
 	go func() {
@@ -75,6 +82,9 @@ func main() {
 	slog.Info("shutting down server...")
 	cancel()
 	wrk.Stop()
+	if schedRunner != nil {
+		schedRunner.Stop()
+	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()

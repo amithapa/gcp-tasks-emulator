@@ -14,6 +14,8 @@ func NewRouter(database *db.DB, cfg *config.Config) http.Handler {
 	queueH := NewQueueHandler(database, cfg)
 	taskH := NewTaskHandler(database, cfg)
 	uiH := ui.NewHandler(database, cfg)
+	jobH := NewJobHandler(database, cfg)
+	schedUI := ui.NewSchedulerHandler(database, cfg)
 
 	mux.HandleFunc("GET /health", healthHandler)
 
@@ -46,6 +48,25 @@ func NewRouter(database *db.DB, cfg *config.Config) http.Handler {
 	mux.HandleFunc("GET /ui/task", uiH.TaskDetail)
 	mux.HandleFunc("GET /ui/{$}", uiH.Index)
 	mux.HandleFunc("GET /ui", uiH.Index)
+
+	jobBase := "/v1/projects/{project}/locations/{location}/jobs"
+	mux.HandleFunc("POST "+jobBase, jobH.Create)
+	mux.HandleFunc("GET "+jobBase, jobH.List)
+	mux.HandleFunc("GET "+jobBase+"/{job}", jobH.Get)
+	mux.HandleFunc("PATCH "+jobBase+"/{job}", jobH.Update)
+	mux.HandleFunc("DELETE "+jobBase+"/{job}", jobH.Delete)
+	// ServeMux wildcards must span a whole segment, so the custom verbs
+	// (:pause, :resume, :run) are dispatched by jobH.Action.
+	mux.HandleFunc("POST "+jobBase+"/{job}", jobH.Action)
+
+	mux.HandleFunc("GET /ui/jobs", schedUI.ListJobs)
+	mux.HandleFunc("POST /ui/jobs", schedUI.CreateJob)
+	mux.HandleFunc("GET /ui/job", schedUI.JobDetail)
+	mux.HandleFunc("POST /ui/job/update", schedUI.UpdateJob)
+	mux.HandleFunc("POST /ui/job/pause", schedUI.PauseJob)
+	mux.HandleFunc("POST /ui/job/resume", schedUI.ResumeJob)
+	mux.HandleFunc("POST /ui/job/run", schedUI.RunJob)
+	mux.HandleFunc("POST /ui/job/delete", schedUI.DeleteJob)
 
 	return mux
 }
