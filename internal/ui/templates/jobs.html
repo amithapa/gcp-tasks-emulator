@@ -1,0 +1,120 @@
+{{template "head" "Scheduler"}}
+{{template "nav" "jobs"}}
+<main id="main">
+    <div class="pagehead">
+        <div>
+            <h1>Scheduler</h1>
+            <p class="subtitle">Cloud Scheduler jobs stored in this emulator. Now {{.Now}}.</p>
+        </div>
+        <label class="muted"><input type="checkbox" id="autorefresh"> Auto-refresh (5s)</label>
+    </div>
+
+    {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
+
+    <section class="card" aria-labelledby="create-h">
+        <h2 id="create-h">Create job</h2>
+        <form class="stack" method="POST" action="/ui/jobs">
+            <label>Project <input type="text" name="project" value="{{.DefaultProject}}"></label>
+            <label>Location <input type="text" name="location" value="{{.DefaultLocation}}"></label>
+            <label>Job name <input type="text" name="name" placeholder="my-job" required></label>
+            <label>Schedule (cron / @every 30s) <input type="text" name="schedule" placeholder="*/5 * * * *" required></label>
+            <label>Time zone <input type="text" name="time_zone" value="UTC"></label>
+            <label>Method
+                <select name="http_method">
+                    <option>POST</option><option>GET</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option>
+                </select>
+            </label>
+            <label>Target URL <input type="text" name="url" placeholder="http://localhost:3000/hook" required></label>
+            <label>Retry count <input type="number" name="retry_count" value="0" min="0"></label>
+            <label class="wide">Description <input type="text" name="description"></label>
+            <label>Headers (Key: Value per line) <textarea name="headers"></textarea></label>
+            <label>Body <textarea name="body"></textarea></label>
+            <div class="wide"><button type="submit" class="btn">Create job</button></div>
+        </form>
+    </section>
+
+    <div class="table-wrap">
+        <table>
+            <caption class="sr-only">Scheduler jobs</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Job</th><th scope="col">Schedule</th><th scope="col">State</th><th scope="col">Target</th>
+                    <th scope="col">Next run</th><th scope="col">Last attempt</th><th scope="col">Last status</th><th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Jobs}}
+                <tr>
+                    <td><a href="/ui/job?job={{urlquery .ID}}"><strong>{{.Name}}</strong></a><div class="muted small">{{.Project}} / {{.Location}}</div></td>
+                    <td><code>{{.Schedule}}</code><div class="muted small">{{.TimeZone}}</div></td>
+                    <td><span class="badge badge-{{.State}}">{{.State}}</span></td>
+                    <td class="url"><code>{{.Method}}</code> {{.URL}}</td>
+                    <td>{{.NextRun}}</td>
+                    <td>{{.LastAttempt}}</td>
+                    <td>{{if .LastError}}<span class="badge badge-FAILED">{{.LastStatus}}</span><div class="muted small">{{.LastError}}</div>{{else if eq .LastStatus "OK"}}<span class="badge badge-OK">OK</span>{{else}}<span class="muted">-</span>{{end}}</td>
+                    <td>
+                        <div class="actions">
+                            {{if .Enabled}}
+                            <form class="inline" method="POST" action="/ui/job/pause"><input type="hidden" name="job" value="{{.ID}}"><button class="btn btn-sm btn-ghost" type="submit">Pause</button></form>
+                            {{else}}
+                            <form class="inline" method="POST" action="/ui/job/resume"><input type="hidden" name="job" value="{{.ID}}"><button class="btn btn-sm btn-ghost" type="submit">Resume</button></form>
+                            {{end}}
+                            <form class="inline" method="POST" action="/ui/job/run"><input type="hidden" name="job" value="{{.ID}}"><button class="btn btn-sm" type="submit">Run now</button></form>
+                            <a class="btn btn-sm btn-ghost" href="/ui/job?job={{urlquery .ID}}">Details</a>
+                            <form class="inline" method="POST" action="/ui/job/delete" data-confirm="Delete job {{.Name}}? This cannot be undone."><input type="hidden" name="job" value="{{.ID}}"><button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+                        </div>
+                    </td>
+                </tr>
+                {{else}}
+                <tr><td colspan="8" class="empty">No jobs yet. Create one above.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</main>
+{{template "foot"}}
+
+{{define "scheduler_job_detail"}}{{template "head" .Job.Name}}
+{{template "nav" "jobs"}}
+<main id="main">
+    <h1>{{.Job.Name}}</h1>
+    <p class="crumbs"><a href="/ui/jobs">&larr; All jobs</a></p>
+    <p class="subtitle"><span class="badge badge-{{.Job.State}}">{{.Job.State}}</span></p>
+    {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
+
+    <div class="actions card">
+        {{if .Job.Enabled}}
+        <form class="inline" method="POST" action="/ui/job/pause"><input type="hidden" name="job" value="{{.Job.ID}}"><input type="hidden" name="from" value="detail"><button class="btn btn-ghost" type="submit">Pause</button></form>
+        {{else}}
+        <form class="inline" method="POST" action="/ui/job/resume"><input type="hidden" name="job" value="{{.Job.ID}}"><input type="hidden" name="from" value="detail"><button class="btn btn-ghost" type="submit">Resume</button></form>
+        {{end}}
+        <form class="inline" method="POST" action="/ui/job/run"><input type="hidden" name="job" value="{{.Job.ID}}"><input type="hidden" name="from" value="detail"><button class="btn" type="submit">Run now</button></form>
+        <form class="inline" method="POST" action="/ui/job/delete" data-confirm="Delete job {{.Job.Name}}? This cannot be undone."><input type="hidden" name="job" value="{{.Job.ID}}"><button class="btn btn-danger" type="submit">Delete</button></form>
+    </div>
+
+    <section class="card"><h2>Status</h2>
+    <dl class="kv">
+        <dt>Resource name</dt><dd>{{.Job.ID}}</dd>
+        <dt>Next run</dt><dd>{{.Job.NextRun}}</dd>
+        <dt>Last attempt</dt><dd>{{.Job.LastAttempt}}</dd>
+        <dt>Last status</dt><dd>{{.Job.LastStatus}}{{if .Job.LastError}} &mdash; {{.Job.LastError}}{{end}}</dd>
+        <dt>Attempt deadline</dt><dd>{{.Job.Deadline}}</dd>
+        <dt>Retry</dt><dd>count {{.Job.RetryCount}}, backoff {{.Job.MinBackoff}} &ndash; {{.Job.MaxBackoff}}, max doublings {{.Job.MaxDoubling}}, max duration {{.Job.MaxRetryDur}}</dd>
+        <dt>Created</dt><dd>{{.Job.Created}}</dd>
+    </dl></section>
+
+    <section class="card"><h2>Edit</h2>
+    <form class="stack" method="POST" action="/ui/job/update">
+        <input type="hidden" name="job" value="{{.Job.ID}}">
+        <label>Schedule <input type="text" name="schedule" value="{{.Job.Schedule}}" required></label>
+        <label>Time zone <input type="text" name="time_zone" value="{{.Job.TimeZone}}"></label>
+        <label>Method <input type="text" name="http_method" value="{{.Job.Method}}"></label>
+        <label>Target URL <input type="text" name="url" value="{{.Job.URL}}" required></label>
+        <label>Retry count <input type="number" name="retry_count" value="{{.Job.RetryCount}}" min="0"></label>
+        <label class="wide">Description <input type="text" name="description" value="{{.Job.Description}}"></label>
+        <label>Headers (Key: Value per line) <textarea name="headers">{{.Job.Headers}}</textarea></label>
+        <label>Body <textarea name="body">{{.Job.Body}}</textarea></label>
+        <div class="wide"><button type="submit" class="btn">Save</button></div>
+    </form></section>
+</main>
+{{template "foot"}}{{end}}

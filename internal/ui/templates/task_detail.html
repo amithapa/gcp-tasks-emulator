@@ -1,0 +1,70 @@
+{{template "head" .TaskID}}
+{{template "nav" "queues"}}
+<main id="main">
+    <p class="crumbs"><a href="/ui/queues">Queues</a> / <a href="/ui/queue?queue={{urlquery .Queue.ID}}">{{.Queue.Name}}</a> / {{.TaskID}}</p>
+
+    <div class="pagehead">
+        <div>
+            <h1><code>{{.TaskID}}</code> <span class="badge badge-{{.Task.Status}}">{{.Task.Status}}</span></h1>
+            <p class="subtitle mono">{{.Task.Name}}</p>
+        </div>
+        <div class="actions">
+            {{if ne .Task.Status "RUNNING"}}
+            <form class="inline" method="POST" action="/ui/queue/tasks/run">
+                <input type="hidden" name="queue" value="{{.Queue.ID}}">
+                <input type="hidden" name="task" value="{{.TaskID}}">
+                <input type="hidden" name="next" value="{{.CurrentURL}}">
+                <button type="submit" class="btn">{{if eq .Task.Status "FAILED"}}Retry{{else if eq .Task.Status "COMPLETED"}}Re-run{{else}}Run now{{end}}</button>
+            </form>
+            {{end}}
+            <form class="inline" method="POST" action="/ui/queue/tasks/delete" data-confirm="Delete task {{.TaskID}}?">
+                <input type="hidden" name="queue" value="{{.Queue.ID}}">
+                <input type="hidden" name="task" value="{{.TaskID}}">
+                <input type="hidden" name="next" value="/ui/queue?queue={{urlquery .Queue.ID}}">
+                <button type="submit" class="btn btn-danger">Delete</button>
+            </form>
+        </div>
+    </div>
+
+    {{if .Notice}}<div class="notice" role="status">{{.Notice}}</div>{{end}}
+
+    {{if .Task.LastError}}
+    <section class="card" aria-labelledby="err-h">
+        <h2 id="err-h">Last error</h2>
+        <pre class="error-text">{{.Task.LastError}}</pre>
+    </section>
+    {{end}}
+
+    <section class="card" aria-labelledby="req-h">
+        <h2 id="req-h">Request</h2>
+        <dl class="kv">
+            <dt>Method</dt><dd><code>{{.Task.HTTPMethod}}</code></dd>
+            <dt>URL</dt><dd><code>{{.Task.URL}}</code></dd>
+            <dt>Dispatch deadline</dt><dd>{{.Task.DispatchDeadline}}s</dd>
+        </dl>
+    </section>
+
+    <section class="card" aria-labelledby="sched-h">
+        <h2 id="sched-h">Schedule &amp; attempts</h2>
+        <dl class="kv">
+            <dt>Created</dt><dd>{{timeTag .Task.CreatedAt}}</dd>
+            <dt>Scheduled for</dt><dd>{{timeTag .Task.ScheduleTime}}</dd>
+            <dt>Next attempt</dt><dd>{{timeTag .Task.NextAttemptAt}}{{if ne .Task.Status "PENDING"}} <span class="muted small">(only used while pending)</span>{{end}}</dd>
+            <dt>Attempts made</dt><dd>{{.Task.Attempts}}</dd>
+            <dt>Retries used</dt><dd>{{.Task.RetryCount}} of {{.Task.MaxRetries}}</dd>
+        </dl>
+    </section>
+
+    <section class="card" aria-labelledby="hdr-h">
+        <h2 id="hdr-h">Headers</h2>
+        {{if .Task.Headers}}
+        <dl class="kv">{{range $k, $v := .Task.Headers}}<dt class="mono">{{$k}}</dt><dd class="mono">{{$v}}</dd>{{end}}</dl>
+        {{else}}<p class="muted">No custom headers.</p>{{end}}
+    </section>
+
+    <section class="card" aria-labelledby="body-h">
+        <h2 id="body-h">Payload {{if .BodyNote}}<span class="muted small">({{.BodyNote}})</span>{{end}}</h2>
+        {{if .Body}}<pre>{{.Body}}</pre>{{else}}<p class="muted">Empty body.</p>{{end}}
+    </section>
+</main>
+{{template "foot"}}

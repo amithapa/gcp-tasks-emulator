@@ -39,3 +39,13 @@ data/
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Built binary
+/cloud-tasks-emulator
+
+# OS files
+.DS_Store
+
+# Env variants (keep the example tracked)
+.env.*
+!.env.example

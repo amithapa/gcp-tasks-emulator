@@ -18,6 +18,8 @@ type Config struct {
 	MaxBackoffSeconds       int
 	DefaultMaxRetries       int
 	TaskDispatchTimeoutSecs int
+	SchedulerEnabled        bool
+	SchedulerPollIntervalMs int
 }
 
 func Load() (*Config, error) {
@@ -34,6 +36,8 @@ func Load() (*Config, error) {
 		MaxBackoffSeconds:       getEnvInt("MAX_BACKOFF_SECONDS", 60),
 		DefaultMaxRetries:       getEnvInt("DEFAULT_MAX_RETRIES", 5),
 		TaskDispatchTimeoutSecs: getEnvInt("TASK_DISPATCH_TIMEOUT_SECS", 30),
+		SchedulerEnabled:        getEnvBool("SCHEDULER_ENABLED", true),
+		SchedulerPollIntervalMs: getEnvInt("SCHEDULER_POLL_INTERVAL_MS", 1000),
 	}
 	return cfg, nil
 }

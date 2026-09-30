@@ -2,8 +2,11 @@ package grpcserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +15,7 @@ import (
 	"cloud-tasks-emulator/internal/queues"
 	"cloud-tasks-emulator/internal/tasks"
 	"cloud.google.com/go/cloudtasks/apiv2/cloudtaskspb"
+	"cloud.google.com/go/scheduler/apiv1/schedulerpb"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -38,6 +42,7 @@ func (s *Server) Run(ctx context.Context, addr string) error {
 	}
 	grpcServer := grpc.NewServer()
 	cloudtaskspb.RegisterCloudTasksServer(grpcServer, s)
+	schedulerpb.RegisterCloudSchedulerServer(grpcServer, NewSchedulerServer(s.db))
 	go func() {
 		<-ctx.Done()
 		grpcServer.GracefulStop()
@@ -103,12 +108,6 @@ func (s *Server) CreateQueue(ctx context.Context, req *cloudtaskspb.CreateQueueR
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	if project == "" {
-		project = s.cfg.DefaultProject
-	}
-	if location == "" {
-		location = s.cfg.DefaultLocation
-	}
 	if req.GetQueue() == nil {
 		return nil, status.Error(codes.InvalidArgument, "queue is required")
 	}
@@ -119,6 +118,9 @@ func (s *Server) CreateQueue(ctx context.Context, req *cloudtaskspb.CreateQueueR
 	queueName := parts[len(parts)-1]
 	if queueName == "" {
 		return nil, status.Error(codes.InvalidArgument, "queue name is required")
+	}
+	if err := queues.ValidateName(queueName); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	q := &queues.Queue{Project: project, Location: location, Name: queueName}
@@ -131,31 +133,80 @@ func (s *Server) CreateQueue(ctx context.Context, req *cloudtaskspb.CreateQueueR
 
 	repo := queues.NewRepository(s.db.Conn())
 	if err := repo.Create(q); err != nil {
-		return nil, status.Error(codes.AlreadyExists, err.Error())
+		return nil, queueErr(err)
 	}
 	return queueToProto(q), nil
+}
+
+// queueErr maps repository errors to gRPC status errors.
+func queueErr(err error) error {
+	switch {
+	case errors.Is(err, queues.ErrAlreadyExists):
+		return status.Error(codes.AlreadyExists, err.Error())
+	case errors.Is(err, queues.ErrNotFound):
+		return status.Error(codes.NotFound, err.Error())
+	default:
+		return status.Error(codes.Internal, err.Error())
+	}
+}
+
+func taskErr(err error) error {
+	switch {
+	case errors.Is(err, tasks.ErrAlreadyExists):
+		return status.Error(codes.AlreadyExists, err.Error())
+	case errors.Is(err, tasks.ErrNotFound):
+		return status.Error(codes.NotFound, err.Error())
+	default:
+		return status.Error(codes.Internal, err.Error())
+	}
 }
 
 func (s *Server) DeleteQueue(ctx context.Context, req *cloudtaskspb.DeleteQueueRequest) (*emptypb.Empty, error) {
 	repo := queues.NewRepository(s.db.Conn())
 	if err := repo.Delete(req.GetName()); err != nil {
-		return nil, status.Error(codes.NotFound, err.Error())
+		return nil, queueErr(err)
 	}
 	return &emptypb.Empty{}, nil
 }
 
+const (
+	defaultPageSize = 1000
+	maxPageSize     = 1000
+)
+
 func (s *Server) ListTasks(ctx context.Context, req *cloudtaskspb.ListTasksRequest) (*cloudtaskspb.ListTasksResponse, error) {
+	pageSize := defaultPageSize
+	if req.GetPageSize() < 0 {
+		return nil, status.Error(codes.InvalidArgument, "page_size must not be negative")
+	}
+	if req.GetPageSize() > 0 {
+		pageSize = min(int(req.GetPageSize()), maxPageSize)
+	}
+	offset := 0
+	if tok := req.GetPageToken(); tok != "" {
+		n, err := strconv.Atoi(tok)
+		if err != nil || n < 0 {
+			return nil, status.Error(codes.InvalidArgument, "invalid page_token")
+		}
+		offset = n
+	}
+
 	repo := tasks.NewRepository(s.db.Conn())
-	list, err := repo.List(req.GetParent(), "")
+	// Fetch one extra row to know whether another page exists.
+	list, err := repo.ListPage(req.GetParent(), "", pageSize+1, offset)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-
-	pbTasks := make([]*cloudtaskspb.Task, len(list))
-	for i, t := range list {
-		pbTasks[i] = taskToProto(t)
+	resp := &cloudtaskspb.ListTasksResponse{}
+	if len(list) > pageSize {
+		list = list[:pageSize]
+		resp.NextPageToken = strconv.Itoa(offset + pageSize)
 	}
-	return &cloudtaskspb.ListTasksResponse{Tasks: pbTasks}, nil
+	resp.Tasks = make([]*cloudtaskspb.Task, len(list))
+	for i, t := range list {
+		resp.Tasks[i] = taskToProto(t)
+	}
+	return resp, nil
 }
 
 func (s *Server) GetTask(ctx context.Context, req *cloudtaskspb.GetTaskRequest) (*cloudtaskspb.Task, error) {
@@ -179,42 +230,23 @@ func (s *Server) CreateTask(ctx context.Context, req *cloudtaskspb.CreateTaskReq
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	if project == "" {
-		project = s.cfg.DefaultProject
-	}
-	if location == "" {
-		location = s.cfg.DefaultLocation
-	}
-
 	queueID := "projects/" + project + "/locations/" + location + "/queues/" + queueName
-	queueRepo := queues.NewRepository(s.db.Conn())
-	var q *queues.Queue
-	q, err = queueRepo.Get(queueID)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	if q == nil {
-		if s.cfg.AutoCreateQueues {
-			q = &queues.Queue{Project: project, Location: location, Name: queueName}
-			if err := queueRepo.Create(q); err != nil {
-				return nil, status.Error(codes.Internal, err.Error())
-			}
-		} else {
-			return nil, status.Error(codes.NotFound, "queue not found")
-		}
-	}
 
+	// Validate the request fully before touching the database, so a bad
+	// request never auto-creates a queue.
 	pt := req.GetTask()
 	if pt == nil {
 		return nil, status.Error(codes.InvalidArgument, "task is required")
 	}
-
 	httpReq := pt.GetHttpRequest()
 	if httpReq == nil {
 		return nil, status.Error(codes.InvalidArgument, "task.http_request is required")
 	}
 	if httpReq.GetUrl() == "" {
 		return nil, status.Error(codes.InvalidArgument, "task.http_request.url is required")
+	}
+	if err := tasks.ValidateURL(httpReq.GetUrl()); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	method := "POST"
@@ -239,11 +271,11 @@ func (s *Server) CreateTask(ctx context.Context, req *cloudtaskspb.CreateTaskReq
 	}
 
 	dispatchDeadline := 30
-	if pt.GetDispatchDeadline() != nil {
-		dispatchDeadline = int(pt.GetDispatchDeadline().Seconds)
-	}
-	if dispatchDeadline < 15 {
-		dispatchDeadline = 30
+	if d := pt.GetDispatchDeadline(); d != nil {
+		if d.AsDuration() <= 0 {
+			return nil, status.Error(codes.InvalidArgument, "dispatch_deadline must be positive")
+		}
+		dispatchDeadline = int(math.Ceil(d.AsDuration().Seconds()))
 	}
 
 	headers := make(map[string]string)
@@ -252,13 +284,38 @@ func (s *Server) CreateTask(ctx context.Context, req *cloudtaskspb.CreateTaskReq
 	}
 
 	taskID := uuid.New().String()
-	if pt.GetName() != "" {
-		parts := strings.Split(pt.GetName(), "/")
-		if len(parts) >= 2 {
-			taskID = parts[len(parts)-1]
+	if name := pt.GetName(); name != "" {
+		if strings.Contains(name, "/") {
+			prefix := queueID + "/tasks/"
+			if !strings.HasPrefix(name, prefix) {
+				return nil, status.Error(codes.InvalidArgument, "task.name must belong to queue "+queueID)
+			}
+			name = strings.TrimPrefix(name, prefix)
 		}
+		if err := tasks.ValidateID(name); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		taskID = name
 	}
 	taskName := queueID + "/tasks/" + taskID
+
+	queueRepo := queues.NewRepository(s.db.Conn())
+	q, err := queueRepo.Get(queueID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if q == nil {
+		if !s.cfg.AutoCreateQueues {
+			return nil, status.Error(codes.NotFound, "queue not found")
+		}
+		if err := queues.ValidateName(queueName); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		q = &queues.Queue{Project: project, Location: location, Name: queueName}
+		if err := queueRepo.Create(q); err != nil && !errors.Is(err, queues.ErrAlreadyExists) {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+	}
 
 	t := &tasks.Task{
 		ID:               taskName,
@@ -278,7 +335,10 @@ func (s *Server) CreateTask(ctx context.Context, req *cloudtaskspb.CreateTaskReq
 
 	repo := tasks.NewRepository(s.db.Conn())
 	if err := repo.Create(t); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, taskErr(err)
+	}
+	if stored, err := repo.Get(taskName); err == nil && stored != nil {
+		t = stored
 	}
 	return taskToProto(t), nil
 }
@@ -286,7 +346,7 @@ func (s *Server) CreateTask(ctx context.Context, req *cloudtaskspb.CreateTaskReq
 func (s *Server) DeleteTask(ctx context.Context, req *cloudtaskspb.DeleteTaskRequest) (*emptypb.Empty, error) {
 	repo := tasks.NewRepository(s.db.Conn())
 	if err := repo.Delete(req.GetName()); err != nil {
-		return nil, status.Error(codes.NotFound, err.Error())
+		return nil, taskErr(err)
 	}
 	return &emptypb.Empty{}, nil
 }
@@ -294,7 +354,7 @@ func (s *Server) DeleteTask(ctx context.Context, req *cloudtaskspb.DeleteTaskReq
 func (s *Server) RunTask(ctx context.Context, req *cloudtaskspb.RunTaskRequest) (*cloudtaskspb.Task, error) {
 	repo := tasks.NewRepository(s.db.Conn())
 	if err := repo.SetNextAttemptNow(req.GetName()); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, taskErr(err)
 	}
 	t, err := repo.Get(req.GetName())
 	if err != nil || t == nil {
@@ -303,26 +363,79 @@ func (s *Server) RunTask(ctx context.Context, req *cloudtaskspb.RunTaskRequest) 
 	return taskToProto(t), nil
 }
 
-func (s *Server) UpdateQueue(context.Context, *cloudtaskspb.UpdateQueueRequest) (*cloudtaskspb.Queue, error) {
-	return nil, status.Error(codes.Unimplemented, "UpdateQueue not supported")
+// UpdateQueue updates a queue's rate limits (the only mutable setting the
+// emulator honours).
+func (s *Server) UpdateQueue(ctx context.Context, req *cloudtaskspb.UpdateQueueRequest) (*cloudtaskspb.Queue, error) {
+	pq := req.GetQueue()
+	if pq == nil || pq.GetName() == "" {
+		return nil, status.Error(codes.InvalidArgument, "queue.name is required")
+	}
+	repo := queues.NewRepository(s.db.Conn())
+	if pq.GetRateLimits() != nil {
+		apply := len(req.GetUpdateMask().GetPaths()) == 0
+		for _, p := range req.GetUpdateMask().GetPaths() {
+			if strings.HasPrefix(p, "rate_limits") {
+				apply = true
+			}
+		}
+		if apply {
+			rl := queues.RateLimits{
+				MaxDispatchesPerSecond:  int(pq.GetRateLimits().GetMaxDispatchesPerSecond()),
+				MaxConcurrentDispatches: int(pq.GetRateLimits().GetMaxConcurrentDispatches()),
+			}
+			if err := repo.UpdateRateLimits(pq.GetName(), rl); err != nil {
+				return nil, queueErr(err)
+			}
+		}
+	}
+	return s.getQueueProto(repo, pq.GetName())
 }
 
-func (s *Server) PurgeQueue(context.Context, *cloudtaskspb.PurgeQueueRequest) (*cloudtaskspb.Queue, error) {
-	return nil, status.Error(codes.Unimplemented, "PurgeQueue not supported")
+func (s *Server) getQueueProto(repo *queues.Repository, name string) (*cloudtaskspb.Queue, error) {
+	q, err := repo.Get(name)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if q == nil {
+		return nil, status.Error(codes.NotFound, "queue not found")
+	}
+	return queueToProto(q), nil
 }
 
-func (s *Server) PauseQueue(context.Context, *cloudtaskspb.PauseQueueRequest) (*cloudtaskspb.Queue, error) {
-	return nil, status.Error(codes.Unimplemented, "PauseQueue not supported")
+// PurgeQueue deletes all tasks in the queue.
+func (s *Server) PurgeQueue(ctx context.Context, req *cloudtaskspb.PurgeQueueRequest) (*cloudtaskspb.Queue, error) {
+	repo := queues.NewRepository(s.db.Conn())
+	if _, err := repo.Purge(req.GetName()); err != nil {
+		return nil, queueErr(err)
+	}
+	return s.getQueueProto(repo, req.GetName())
 }
 
-func (s *Server) ResumeQueue(context.Context, *cloudtaskspb.ResumeQueueRequest) (*cloudtaskspb.Queue, error) {
-	return nil, status.Error(codes.Unimplemented, "ResumeQueue not supported")
+// PauseQueue stops dispatching the queue's tasks until it is resumed.
+func (s *Server) PauseQueue(ctx context.Context, req *cloudtaskspb.PauseQueueRequest) (*cloudtaskspb.Queue, error) {
+	repo := queues.NewRepository(s.db.Conn())
+	if err := repo.SetState(req.GetName(), queues.StatePaused); err != nil {
+		return nil, queueErr(err)
+	}
+	return s.getQueueProto(repo, req.GetName())
+}
+
+func (s *Server) ResumeQueue(ctx context.Context, req *cloudtaskspb.ResumeQueueRequest) (*cloudtaskspb.Queue, error) {
+	repo := queues.NewRepository(s.db.Conn())
+	if err := repo.SetState(req.GetName(), queues.StateRunning); err != nil {
+		return nil, queueErr(err)
+	}
+	return s.getQueueProto(repo, req.GetName())
 }
 
 func queueToProto(q *queues.Queue) *cloudtaskspb.Queue {
+	state := cloudtaskspb.Queue_RUNNING
+	if q.Paused() {
+		state = cloudtaskspb.Queue_PAUSED
+	}
 	pq := &cloudtaskspb.Queue{
 		Name:  q.ResourceName(q.Project, q.Location),
-		State: cloudtaskspb.Queue_RUNNING,
+		State: state,
 	}
 	if q.RateLimits != nil {
 		pq.RateLimits = &cloudtaskspb.RateLimits{
@@ -334,6 +447,10 @@ func queueToProto(q *queues.Queue) *cloudtaskspb.Queue {
 }
 
 func taskToProto(t *tasks.Task) *cloudtaskspb.Task {
+	responses := t.Attempts()
+	if t.Status == tasks.StatusRunning {
+		responses--
+	}
 	pt := &cloudtaskspb.Task{
 		Name: t.Name,
 		MessageType: &cloudtaskspb.Task_HttpRequest{
@@ -347,8 +464,8 @@ func taskToProto(t *tasks.Task) *cloudtaskspb.Task {
 		ScheduleTime:     timestamppb.New(t.ScheduleTime),
 		CreateTime:       timestamppb.New(t.CreatedAt),
 		DispatchDeadline: durationpb.New(time.Duration(t.DispatchDeadline) * time.Second),
-		DispatchCount:    int32(t.RetryCount + 1),
-		ResponseCount:    int32(t.RetryCount),
+		DispatchCount:    int32(t.Attempts()),
+		ResponseCount:    int32(responses),
 	}
 	return pt
 }

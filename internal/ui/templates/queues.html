@@ -1,69 +1,91 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Queues - Cloud Tasks Emulator</title>
-    <style>
-        * { box-sizing: border-box; }
-        body { font-family: system-ui, sans-serif; max-width: 98%; margin: 0 auto; padding: 1rem 1.5rem; }
-        h1 { color: #1a73e8; margin-bottom: 0.5rem; }
-        .subtitle { color: #5f6368; margin-bottom: 2rem; }
-        .error { background: #fce8e6; color: #c5221f; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #dadce0; }
-        th { background: #f8f9fa; font-weight: 600; }
-        a { color: #1a73e8; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        .btn { display: inline-block; padding: 0.5rem 1rem; background: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.875rem; }
-        .btn:hover { background: #1557b0; }
-        .btn-danger { background: #ea4335; }
-        .btn-danger:hover { background: #c5221f; }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-        form { display: flex; gap: 0.5rem; margin-bottom: 2rem; flex-wrap: wrap; align-items: flex-end; }
-        input { padding: 0.5rem; border: 1px solid #dadce0; border-radius: 4px; }
-        input[type="text"] { min-width: 150px; }
-        .actions { display: flex; gap: 0.5rem; }
-    </style>
-</head>
-<body>
-    <h1>Cloud Tasks Emulator</h1>
-    <p class="subtitle">Queue Management</p>
+{{template "head" "Queues"}}
+{{template "nav" "queues"}}
+<main id="main">
+    <div class="pagehead">
+        <div>
+            <h1>Queues</h1>
+            <p class="subtitle">Cloud Tasks queues stored in this emulator.</p>
+        </div>
+        <label class="muted"><input type="checkbox" id="autorefresh"> Auto-refresh (5s)</label>
+    </div>
 
-    {{if .Error}}
-    <div class="error">{{.Error}}</div>
-    {{end}}
+    {{if .Notice}}<div class="notice" role="status">{{.Notice}}</div>{{end}}
+    {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
 
-    <form method="POST" action="/ui/queues">
-        <input type="text" name="project" placeholder="Project" value="local-project">
-        <input type="text" name="location" placeholder="Location" value="us-central1">
-        <input type="text" name="name" placeholder="Queue name" required>
-        <button type="submit" class="btn">Create Queue</button>
-    </form>
+    <section class="card" aria-labelledby="create-h">
+        <h2 id="create-h">Create queue</h2>
+        <form class="stack" method="POST" action="/ui/queues">
+            <label>Project <input type="text" name="project" value="{{.DefaultProject}}"></label>
+            <label>Location <input type="text" name="location" value="{{.DefaultLocation}}"></label>
+            <label>Queue name <input type="text" name="name" placeholder="my-queue" required pattern="[A-Za-z0-9_\-]{1,100}" title="Letters, numbers, hyphens and underscores"></label>
+            <label>Max dispatches / s <input type="number" name="max_dispatches_per_second" min="1" placeholder="500"></label>
+            <label>Max concurrent <input type="number" name="max_concurrent_dispatches" min="1" placeholder="1000"></label>
+            <div><button type="submit" class="btn">Create queue</button></div>
+        </form>
+    </section>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .Queues}}
-            <tr>
-                <td><a href="/ui/queue?queue={{urlquery .ID}}">{{.Name}}</a></td>
-                <td>
-                    <a href="/ui/queue?queue={{urlquery .ID}}" class="btn btn-sm">View Tasks</a>
-                    <form method="POST" action="/ui/queue/delete" style="display:inline;margin:0;">
-                        <input type="hidden" name="queue" value="{{.ID}}">
-                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this queue?')">Delete</button>
-                    </form>
-                </td>
-            </tr>
-            {{else}}
-            <tr><td colspan="2">No queues. Create one above.</td></tr>
-            {{end}}
-        </tbody>
-    </table>
-</body>
-</html>
+    <div class="table-wrap">
+        <table>
+            <caption class="sr-only">Queues</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Queue</th>
+                    <th scope="col">State</th>
+                    <th scope="col">Tasks</th>
+                    <th scope="col" class="num">Rate / concurrency</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Queues}}
+                <tr>
+                    <td>
+                        <a href="/ui/queue?queue={{urlquery .Queue.ID}}"><strong>{{.Queue.Name}}</strong></a>
+                        <div class="muted small">{{.Queue.Project}} / {{.Queue.Location}}</div>
+                    </td>
+                    <td><span class="badge badge-Q{{.State}}" title="Queue state: {{if eq .State "PAUSED"}}not dispatching tasks{{else}}dispatching tasks{{end}}">{{.State}}</span></td>
+                    <td>
+                        <div class="stats" aria-label="Task counts">
+                            <span class="stat p{{if .Counts.Pending}} nonzero{{end}}">{{.Counts.Pending}} pending</span>
+                            <span class="stat r{{if .Counts.Running}} nonzero{{end}}">{{.Counts.Running}} running</span>
+                            <span class="stat c{{if .Counts.Completed}} nonzero{{end}}">{{.Counts.Completed}} completed</span>
+                            <span class="stat f{{if .Counts.Failed}} nonzero{{end}}">{{.Counts.Failed}} failed</span>
+                        </div>
+                    </td>
+                    <td class="num">{{.Queue.RateLimits.MaxDispatchesPerSecond}}/s &middot; {{.Queue.RateLimits.MaxConcurrentDispatches}}</td>
+                    <td>
+                        <div class="actions">
+                            <a href="/ui/queue?queue={{urlquery .Queue.ID}}" class="btn btn-sm">Tasks</a>
+                            {{if eq .State "PAUSED"}}
+                            <form class="inline" method="POST" action="/ui/queue/resume">
+                                <input type="hidden" name="queue" value="{{.Queue.ID}}">
+                                <input type="hidden" name="next" value="/ui/queues">
+                                <button type="submit" class="btn btn-sm btn-ghost">Resume</button>
+                            </form>
+                            {{else}}
+                            <form class="inline" method="POST" action="/ui/queue/pause">
+                                <input type="hidden" name="queue" value="{{.Queue.ID}}">
+                                <input type="hidden" name="next" value="/ui/queues">
+                                <button type="submit" class="btn btn-sm btn-ghost">Pause</button>
+                            </form>
+                            {{end}}
+                            <form class="inline" method="POST" action="/ui/queue/purge" data-confirm="Delete all {{.Counts.Total}} tasks in {{.Queue.Name}}? This cannot be undone.">
+                                <input type="hidden" name="queue" value="{{.Queue.ID}}">
+                                <input type="hidden" name="next" value="/ui/queues">
+                                <button type="submit" class="btn btn-sm btn-danger"{{if not .Counts.Total}} disabled{{end}}>Purge</button>
+                            </form>
+                            <form class="inline" method="POST" action="/ui/queue/delete" data-confirm="Delete queue {{.Queue.Name}} and its {{.Counts.Total}} tasks? This cannot be undone.">
+                                <input type="hidden" name="queue" value="{{.Queue.ID}}">
+                                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {{else}}
+                <tr><td colspan="5"><div class="empty">No queues yet. Create one above, or send a task to a queue that does not exist (queues are auto-created by default).</div></td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</main>
+{{template "foot"}}
