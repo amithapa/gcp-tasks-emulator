@@ -112,6 +112,20 @@ Use `http://localhost:8085/v2` as the base URL for Cloud Tasks REST calls.
 | `WORKER_POLL_INTERVAL_MS` | 500 | Worker poll interval |
 | `DEFAULT_MAX_RETRIES` | 5 | Max retries per task |
 
+## Authenticating to your targets
+
+If your target verifies a service-account JWT, set one of these and the emulator adds
+`Authorization: Bearer <token>` to every task and scheduler request (unless the task/job already sets its own `Authorization` header):
+
+| Variable | Description |
+|----------|-------------|
+| `SERVICE_ACCOUNT_TOKEN` | Static token, sent as-is. Wins if both are set. It stops working when the JWT expires. |
+| `SERVICE_ACCOUNT_JWT_SECRET` | HS256 secret. A fresh 1h token is minted per request with `sub=service-account`, `role=service_role`, `aud`, `iat`, `exp`, `email`. |
+| `SERVICE_ACCOUNT_EMAIL` | `email` claim when minting (default `local-dev@example.com`) |
+| `SERVICE_ACCOUNT_AUDIENCE` | `aud` claim when minting (default `authenticated`) |
+
+The token is the same for every target. Real Cloud Tasks per-task `oidcToken`/`oauthToken` settings are still ignored.
+
 ## Admin UI
 
 Open http://localhost:8085/ui/queues to:

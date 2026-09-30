@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"cloud-tasks-emulator/internal/auth"
 	"cloud-tasks-emulator/internal/config"
 	"cloud-tasks-emulator/internal/db"
 	"cloud-tasks-emulator/internal/queues"
@@ -186,6 +187,7 @@ func (w *Worker) dispatch(t *tasks.Task) {
 	if req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	auth.Apply(req)
 	// Headers Cloud Tasks adds to every dispatch.
 	req.Header.Set("User-Agent", "Google-Cloud-Tasks")
 	req.Header.Set("X-CloudTasks-QueueName", path.Base(t.QueueID))

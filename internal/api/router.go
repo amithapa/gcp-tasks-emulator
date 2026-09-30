@@ -39,6 +39,13 @@ func NewRouter(database *db.DB, cfg *config.Config) http.Handler {
 	mux.HandleFunc("POST /ui/queue/delete", uiH.DeleteQueue)
 	mux.HandleFunc("POST /ui/queue/tasks/retry", uiH.RetryTask)
 	mux.HandleFunc("POST /ui/queue/tasks/run", uiH.RunTask)
+	mux.HandleFunc("POST /ui/queue/tasks/delete", uiH.DeleteTask)
+	mux.HandleFunc("POST /ui/queue/pause", uiH.PauseQueue)
+	mux.HandleFunc("POST /ui/queue/resume", uiH.ResumeQueue)
+	mux.HandleFunc("POST /ui/queue/purge", uiH.PurgeQueue)
+	mux.HandleFunc("GET /ui/task", uiH.TaskDetail)
+	mux.HandleFunc("GET /ui/{$}", uiH.Index)
+	mux.HandleFunc("GET /ui", uiH.Index)
 
 	return mux
 }

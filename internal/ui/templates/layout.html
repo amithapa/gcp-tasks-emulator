@@ -1,0 +1,201 @@
+{{/*
+  Shared layout for every admin UI page. Usage in a page template:
+
+    {{template "head" "Page title"}}
+    {{template "nav" "queues"}}        (active nav key: "queues" or "jobs")
+    <main id="main"> ... </main>
+    {{template "foot"}}
+
+  Helpers provided by the shared CSS/JS:
+    <time class="ts" datetime="RFC3339"> is rewritten to local time + "in 5m"/"3m ago"
+    <form data-confirm="Are you sure?"> asks before submitting
+    .btn .btn-sm .btn-danger .btn-ghost, .badge .badge-<STATE>, .muted, .notice, .error,
+    .card, .stats, form.inline, form.stack, .actions, .empty, .table-wrap
+*/}}
+{{define "head"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{.}} - Cloud Tasks Emulator</title>
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #fff; --surface-2: #f0f2f5; --text: #1f2328; --muted: #5d6671;
+  --border: #d8dee4; --accent: #1a5fd0; --accent-fg: #fff; --accent-hover: #164fae;
+  --danger: #c5221f; --danger-hover: #a51b18;
+  --pending-bg: #e5eefc; --pending-fg: #174ea6;
+  --running-bg: #fdf0d0; --running-fg: #8a4b00;
+  --completed-bg: #dff3e4; --completed-fg: #146c2e;
+  --failed-bg: #fbe3e1; --failed-fg: #a8201a;
+  --paused-bg: #ece7f6; --paused-fg: #5b3ea1;
+  --shadow: 0 1px 2px rgba(0,0,0,.06);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1116; --surface: #161b22; --surface-2: #1e252e; --text: #e6edf3; --muted: #9aa5b1;
+    --border: #2d353f; --accent: #5b9dff; --accent-fg: #071120; --accent-hover: #86b6ff;
+    --danger: #ff7b72; --danger-hover: #ffa198;
+    --pending-bg: #16294a; --pending-fg: #8db8ff;
+    --running-bg: #3a2c0c; --running-fg: #f0b957;
+    --completed-bg: #12301c; --completed-fg: #6fd58c;
+    --failed-bg: #401a18; --failed-fg: #ff9a92;
+    --paused-bg: #2a2144; --paused-fg: #b9a3f0;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.skip { position: absolute; left: -999px; top: 0; background: var(--surface); padding: .5rem 1rem; z-index: 10; }
+.skip:focus { left: .5rem; top: .5rem; }
+.topbar { background: var(--surface); border-bottom: 1px solid var(--border); }
+.topbar-inner { max-width: 1280px; margin: 0 auto; padding: 0 1.25rem; display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+.brand { font-weight: 700; padding: .8rem 0; color: var(--text); }
+.brand:hover { text-decoration: none; }
+.topbar nav { display: flex; gap: .25rem; }
+.topbar nav a { color: var(--muted); padding: .8rem .75rem; border-bottom: 2px solid transparent; }
+.topbar nav a:hover { color: var(--text); text-decoration: none; }
+.topbar nav a[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+main { max-width: 1280px; margin: 0 auto; padding: 1.25rem; }
+h1 { font-size: 1.35rem; margin: 0 0 .25rem; }
+h2 { font-size: 1rem; margin: 0 0 .75rem; }
+.subtitle, .muted { color: var(--muted); }
+.subtitle { margin: 0 0 1.25rem; }
+.muted.small, .small { font-size: .8rem; }
+.crumbs { margin: 0 0 .75rem; color: var(--muted); font-size: .85rem; }
+.pagehead { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem; box-shadow: var(--shadow); }
+.notice, .error { padding: .6rem .85rem; border-radius: 6px; margin-bottom: 1rem; border: 1px solid; }
+.notice { background: var(--completed-bg); color: var(--completed-fg); border-color: var(--completed-fg); }
+.error { background: var(--failed-bg); color: var(--failed-fg); border-color: var(--failed-fg); }
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow); }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: .6rem .8rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--surface-2); font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: nowrap; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--surface-2); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.url { max-width: 28rem; overflow-wrap: anywhere; }
+code, pre, .mono { font-family: var(--mono); font-size: .85em; }
+pre { margin: 0; padding: .75rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 28rem; overflow: auto; }
+pre.error-text { background: var(--failed-bg); color: var(--failed-fg); border-color: var(--failed-fg); }
+.btn { display: inline-block; padding: .4rem .8rem; background: var(--accent); color: var(--accent-fg); border: 1px solid transparent; border-radius: 6px; cursor: pointer; font: inherit; font-size: .85rem; line-height: 1.3; text-decoration: none; }
+.btn:hover { background: var(--accent-hover); text-decoration: none; }
+.btn-sm { padding: .2rem .5rem; font-size: .78rem; }
+.btn-ghost { background: transparent; color: var(--accent); border-color: var(--border); }
+.btn-ghost:hover { background: var(--surface-2); }
+.btn-danger { background: transparent; color: var(--danger); border-color: var(--border); }
+.btn-danger:hover { background: var(--danger); color: var(--surface); border-color: var(--danger); }
+input, select, textarea { padding: .4rem .55rem; border: 1px solid var(--border); border-radius: 6px; font: inherit; background: var(--surface); color: var(--text); }
+textarea { font-family: var(--mono); min-height: 4rem; }
+form.inline { display: inline; margin: 0; }
+form.stack { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .75rem; align-items: end; }
+form.stack label { display: flex; flex-direction: column; gap: .2rem; font-size: .78rem; color: var(--muted); }
+form.stack .wide { grid-column: 1 / -1; }
+.actions { display: flex; gap: .35rem; flex-wrap: wrap; }
+.badge { display: inline-flex; align-items: center; gap: .35rem; padding: .05rem .55rem; border-radius: 999px; font-size: .72rem; font-weight: 600; letter-spacing: .02em; white-space: nowrap; }
+.badge::before { content: ""; width: .45rem; height: .45rem; border-radius: 50%; background: currentColor; }
+.badge-PENDING { background: var(--pending-bg); color: var(--pending-fg); }
+.badge-RUNNING { background: var(--running-bg); color: var(--running-fg); }
+.badge-RUNNING::before { animation: pulse 1.2s ease-in-out infinite; }
+.badge-COMPLETED, .badge-ENABLED, .badge-OK { background: var(--completed-bg); color: var(--completed-fg); }
+.badge-FAILED { background: var(--failed-bg); color: var(--failed-fg); }
+.badge-PAUSED { background: var(--paused-bg); color: var(--paused-fg); }
+@keyframes pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .badge-RUNNING::before { animation: none; } }
+.stats { display: flex; gap: .4rem; flex-wrap: wrap; }
+.stat { font-size: .78rem; padding: .05rem .5rem; border-radius: 999px; background: var(--surface-2); color: var(--muted); font-variant-numeric: tabular-nums; }
+.stat.nonzero.p { background: var(--pending-bg); color: var(--pending-fg); }
+.stat.nonzero.r { background: var(--running-bg); color: var(--running-fg); }
+.stat.nonzero.c { background: var(--completed-bg); color: var(--completed-fg); }
+.stat.nonzero.f { background: var(--failed-bg); color: var(--failed-fg); }
+.tabs { display: flex; gap: .25rem; flex-wrap: wrap; margin: 0 0 .75rem; }
+.tabs a { padding: .3rem .7rem; border-radius: 6px; color: var(--muted); border: 1px solid transparent; }
+.tabs a:hover { background: var(--surface-2); text-decoration: none; }
+.tabs a[aria-current="page"] { background: var(--surface); border-color: var(--border); color: var(--text); font-weight: 600; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: .75rem; }
+.toolbar label { display: inline-flex; gap: .4rem; align-items: center; cursor: pointer; color: var(--muted); }
+.pager { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-top: .75rem; color: var(--muted); }
+.empty { padding: 2rem 1rem; text-align: center; color: var(--muted); }
+dl.kv { display: grid; grid-template-columns: minmax(8rem, 12rem) 1fr; gap: .5rem 1rem; margin: 0; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; overflow-wrap: anywhere; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 640px) {
+  main { padding: .85rem; }
+  dl.kv { grid-template-columns: 1fr; gap: .1rem; }
+  dl.kv dd { margin-bottom: .6rem; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+{{end}}
+
+{{define "nav"}}<header class="topbar"><div class="topbar-inner">
+<a class="brand" href="/ui/queues">Cloud Tasks Emulator</a>
+<nav aria-label="Primary">
+<a href="/ui/queues"{{if eq . "queues"}} aria-current="page"{{end}}>Queues</a>
+<a href="/ui/jobs"{{if eq . "jobs"}} aria-current="page"{{end}}>Scheduler</a>
+</nav>
+</div></header>
+{{end}}
+
+{{define "foot"}}<script>
+(function () {
+  function rel(ms) {
+    var d = ms - Date.now(), a = Math.abs(d) / 1000, u, n;
+    if (a < 5) return 'now';
+    if (a < 60) { n = Math.round(a); u = 's'; }
+    else if (a < 3600) { n = Math.round(a / 60); u = 'm'; }
+    else if (a < 86400) { n = Math.floor(a / 3600); u = 'h'; }
+    else { n = Math.floor(a / 86400); u = 'd'; }
+    return d > 0 ? 'in ' + n + u : n + u + ' ago';
+  }
+  var stamps = [];
+  document.querySelectorAll('time.ts').forEach(function (el) {
+    var ms = Date.parse(el.getAttribute('datetime'));
+    if (isNaN(ms)) return;
+    el.title = el.textContent;
+    el.textContent = new Date(ms).toLocaleString();
+    var r = document.createElement('span');
+    r.className = 'muted small';
+    el.after(document.createTextNode(' '), r);
+    stamps.push([ms, r]);
+  });
+  function tick() { stamps.forEach(function (s) { s[1].textContent = '(' + rel(s[0]) + ')'; }); }
+  tick(); setInterval(tick, 15000);
+
+  document.addEventListener('submit', function (e) {
+    var msg = e.target.getAttribute && e.target.getAttribute('data-confirm');
+    if (msg && !window.confirm(msg)) e.preventDefault();
+  });
+
+  var box = document.getElementById('autorefresh');
+  if (box) {
+    var key = 'ctemu.autorefresh', on = false;
+    try { on = localStorage.getItem(key) === '1'; } catch (err) {}
+    box.checked = on;
+    box.addEventListener('change', function () {
+      try { localStorage.setItem(key, box.checked ? '1' : '0'); } catch (err) {}
+    });
+    setInterval(function () { if (box.checked && !document.hidden) location.reload(); }, 5000);
+  }
+})();
+</script>
+</body>
+</html>
+{{end}}
+
+{{define "message_page"}}{{template "head" .Title}}{{template "nav" "queues"}}
+<main id="main">
+<h1>{{.Title}}</h1>
+<p>{{.Message}}</p>
+<p><a href="/ui/queues">Back to queues</a></p>
+</main>
+{{template "foot"}}{{end}}
