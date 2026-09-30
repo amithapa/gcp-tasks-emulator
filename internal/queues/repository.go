@@ -103,7 +103,9 @@ func (r *Repository) Delete(id string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback() // Rollback is a no-op if Commit succeeded
+	}()
 
 	res, err := tx.Exec("DELETE FROM queues WHERE id = ?", id)
 	if err != nil {
