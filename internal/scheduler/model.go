@@ -38,6 +38,17 @@ var (
 		"POST": true, "GET": true, "HEAD": true, "PUT": true,
 		"DELETE": true, "PATCH": true, "OPTIONS": true,
 	}
+
+	// Timezone aliases for environments with incomplete timezone databases.
+	// Maps common timezone names to fallbacks that are more likely to exist.
+	timezoneAliases = map[string]string{
+		"Asia/Kolkata":    "Asia/Calcutta",  // India
+		"Asia/Rangoon":    "Asia/Yangon",    // Myanmar
+		"Asia/Saigon":     "Asia/Ho_Chi_Minh", // Vietnam
+		"Europe/Belfast":  "Europe/London",  // UK
+		"Europe/Mariehamn": "Europe/Helsinki", // Finland
+		"Etc/GMT+0":       "UTC",            // UTC alias
+	}
 )
 
 // ValidationError marks an error caused by invalid user input (INVALID_ARGUMENT).
@@ -113,9 +124,19 @@ func ParseSchedule(spec, tz string) (cron.Schedule, error) {
 	if tz == "" {
 		tz = DefaultTimeZone
 	}
+
+	// Try to load the timezone, and fall back to an alias if it doesn't exist.
 	if _, err := time.LoadLocation(tz); err != nil {
-		return nil, invalidf("invalid timeZone %q: %v", tz, err)
+		if alias, ok := timezoneAliases[tz]; ok {
+			tz = alias
+			if _, err := time.LoadLocation(tz); err != nil {
+				return nil, invalidf("invalid timeZone %q (and alias %q): %v", timezoneAliases[tz], tz, err)
+			}
+		} else {
+			return nil, invalidf("invalid timeZone %q: %v", tz, err)
+		}
 	}
+
 	sched, err := cronParser.Parse("CRON_TZ=" + tz + " " + spec)
 	if err != nil {
 		return nil, invalidf("invalid schedule %q: %v", spec, err)
