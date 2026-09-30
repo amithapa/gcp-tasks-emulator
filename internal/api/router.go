@@ -21,6 +21,8 @@ func NewRouter(database *db.DB, cfg *config.Config) http.Handler {
 	mux.HandleFunc("GET /v2/projects/{project}/locations/{location}/queues", queueH.List)
 	mux.HandleFunc("GET /v2/projects/{project}/locations/{location}/queues/{queue}", queueH.Get)
 	mux.HandleFunc("DELETE /v2/projects/{project}/locations/{location}/queues/{queue}", queueH.Delete)
+	// Custom verbs (:pause, :resume, :purge); wildcards must span a whole segment.
+	mux.HandleFunc("POST /v2/projects/{project}/locations/{location}/queues/{queue}", queueH.Action)
 
 	mux.HandleFunc("POST /v2/projects/{project}/locations/{location}/queues/{queue}/tasks", taskH.Create)
 	mux.HandleFunc("GET /v2/projects/{project}/locations/{location}/queues/{queue}/tasks", taskH.List)
@@ -28,6 +30,8 @@ func NewRouter(database *db.DB, cfg *config.Config) http.Handler {
 	mux.HandleFunc("DELETE /v2/projects/{project}/locations/{location}/queues/{queue}/tasks/{task}", taskH.Delete)
 
 	mux.HandleFunc("POST /v2/projects/{project}/locations/{location}/queues/{queue}/tasks/{task}/run", taskH.Run)
+	// Google-style custom verb (:run).
+	mux.HandleFunc("POST /v2/projects/{project}/locations/{location}/queues/{queue}/tasks/{task}", taskH.Action)
 
 	mux.HandleFunc("GET /ui/queues", uiH.ListQueues)
 	mux.HandleFunc("POST /ui/queues", uiH.CreateQueue)

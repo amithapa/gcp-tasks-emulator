@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"log/slog"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -12,7 +13,11 @@ type DB struct {
 }
 
 func New(path string) (*DB, error) {
-	conn, err := sql.Open("sqlite3", path+"?_journal_mode=WAL")
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	conn, err := sql.Open("sqlite3", path+sep+"_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
 		return nil, err
 	}
@@ -61,10 +66,16 @@ func (db *DB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_tasks_queue_status ON tasks(queue_id, status)`,
 		`CREATE INDEX IF NOT EXISTS idx_tasks_next_attempt ON tasks(next_attempt_at) WHERE status = 'PENDING'`,
 		`CREATE INDEX IF NOT EXISTS idx_tasks_status_next ON tasks(status, next_attempt_at)`,
+		// Queue state (RUNNING/PAUSED). ALTER TABLE is not idempotent in SQLite;
+		// the "duplicate column name" error is tolerated in the loop below.
+		`ALTER TABLE queues ADD COLUMN state TEXT NOT NULL DEFAULT 'RUNNING'`,
 	}
 
 	for _, m := range migrations {
 		if _, err := db.conn.Exec(m); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				continue
+			}
 			slog.Error("migration failed", "error", err, "sql", m)
 			return err
 		}
