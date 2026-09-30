@@ -5,7 +5,7 @@
 
     <div class="pagehead">
         <div>
-            <h1>{{.Queue.Name}} <span class="badge badge-{{.State}}">{{.State}}</span></h1>
+            <h1>{{.Queue.Name}} <span class="badge badge-Q{{.State}}" title="Queue state: {{if eq .State "PAUSED"}}not dispatching tasks{{else}}dispatching tasks{{end}}">{{.State}}</span></h1>
             <p class="subtitle mono">{{.Queue.ID}}</p>
             <p class="muted small">Limits: {{.Queue.RateLimits.MaxDispatchesPerSecond}} dispatches/s, {{.Queue.RateLimits.MaxConcurrentDispatches}} concurrent</p>
         </div>

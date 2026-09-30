@@ -105,7 +105,8 @@ form.stack .wide { grid-column: 1 / -1; }
 .badge-RUNNING::before { animation: pulse 1.2s ease-in-out infinite; }
 .badge-COMPLETED, .badge-ENABLED, .badge-OK { background: var(--completed-bg); color: var(--completed-fg); }
 .badge-FAILED { background: var(--failed-bg); color: var(--failed-fg); }
-.badge-PAUSED { background: var(--paused-bg); color: var(--paused-fg); }
+.badge-PAUSED, .badge-QPAUSED { background: var(--paused-bg); color: var(--paused-fg); }
+.badge-QRUNNING { background: var(--completed-bg); color: var(--completed-fg); }
 @keyframes pulse { 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .badge-RUNNING::before { animation: none; } }
 .stats { display: flex; gap: .4rem; flex-wrap: wrap; }

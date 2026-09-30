@@ -43,7 +43,7 @@
                         <a href="/ui/queue?queue={{urlquery .Queue.ID}}"><strong>{{.Queue.Name}}</strong></a>
                         <div class="muted small">{{.Queue.Project}} / {{.Queue.Location}}</div>
                     </td>
-                    <td><span class="badge badge-{{.State}}">{{.State}}</span></td>
+                    <td><span class="badge badge-Q{{.State}}" title="Queue state: {{if eq .State "PAUSED"}}not dispatching tasks{{else}}dispatching tasks{{end}}">{{.State}}</span></td>
                     <td>
                         <div class="stats" aria-label="Task counts">
                             <span class="stat p{{if .Counts.Pending}} nonzero{{end}}">{{.Counts.Pending}} pending</span>
