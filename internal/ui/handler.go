@@ -233,7 +233,7 @@ type queueDetailData struct {
 }
 
 func queueURL(queueID, status string, page int) string {
-	v := url.Values{"queue": {queueID}}
+	v := url.Values{"queue": []string{queueID}}
 	if status != "" {
 		v.Set("status", status)
 	}
@@ -393,7 +393,7 @@ func (h *Handler) TaskDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body, note := renderBody(t.Body)
-	v := url.Values{"queue": {queueID}, "task": {taskID}}
+	v := url.Values{"queue": []string{queueID}, "task": []string{taskID}}
 	h.render(w, http.StatusOK, "task_detail.html", &taskDetailData{
 		Queue: q, Task: t, TaskID: taskID, Body: body, BodyNote: note,
 		CurrentURL: "/ui/task?" + v.Encode(), Notice: r.URL.Query().Get("notice"),

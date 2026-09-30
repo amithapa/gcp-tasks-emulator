@@ -20,3 +20,7 @@ issues:
       linters:
         - errcheck
         - shadow
+    # CGO-dependent imports fail in typecheck without proper environment setup
+    - text: "undefined: sqlite3|undefined: cron|could not import"
+      linters:
+        - typecheck

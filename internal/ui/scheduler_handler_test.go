@@ -30,11 +30,11 @@ func TestSchedulerUI(t *testing.T) {
 		fn(w, req)
 		return w
 	}
-	w := post(h.CreateJob, url.Values{"name": {"ui-job"}, "schedule": {"*/5 * * * *"}, "url": {"http://x.test/h"}, "headers": {"X-A: b"}})
+	w := post(h.CreateJob, url.Values{"name": []string{"ui-job"}, "schedule": []string{"*/5 * * * *"}, "url": []string{"http://x.test/h"}, "headers": []string{"X-A: b"}})
 	if w.Code != 303 || strings.Contains(w.Header().Get("Location"), "error") {
 		t.Fatalf("create: %d %s", w.Code, w.Header().Get("Location"))
 	}
-	w = post(h.CreateJob, url.Values{"name": {"bad"}, "schedule": {"nope"}, "url": {"http://x.test/h"}})
+	w = post(h.CreateJob, url.Values{"name": []string{"bad"}, "schedule": []string{"nope"}, "url": []string{"http://x.test/h"}})
 	if !strings.Contains(w.Header().Get("Location"), "error=") {
 		t.Errorf("expected error redirect, got %s", w.Header().Get("Location"))
 	}
@@ -46,17 +46,17 @@ func TestSchedulerUI(t *testing.T) {
 	}
 
 	id := "projects/local-project/locations/us-central1/jobs/ui-job"
-	post(h.PauseJob, url.Values{"job": {id}})
+	post(h.PauseJob, url.Values{"job": []string{id}})
 	rec = httptest.NewRecorder()
 	h.JobDetail(rec, httptest.NewRequest("GET", "/ui/job?job="+url.QueryEscape(id), nil))
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "PAUSED") || !strings.Contains(rec.Body.String(), "X-A: b") {
 		t.Errorf("detail: %d %s", rec.Code, rec.Body)
 	}
-	w = post(h.UpdateJob, url.Values{"job": {id}, "schedule": {"@hourly"}, "url": {"http://x.test/h2"}, "http_method": {"GET"}})
+	w = post(h.UpdateJob, url.Values{"job": []string{id}, "schedule": []string{"@hourly"}, "url": []string{"http://x.test/h2"}, "http_method": []string{"GET"}})
 	if strings.Contains(w.Header().Get("Location"), "error") {
 		t.Errorf("update: %s", w.Header().Get("Location"))
 	}
-	post(h.DeleteJob, url.Values{"job": {id}})
+	post(h.DeleteJob, url.Values{"job": []string{id}})
 	rec = httptest.NewRecorder()
 	h.JobDetail(rec, httptest.NewRequest("GET", "/ui/job?job="+url.QueryEscape(id), nil))
 	if rec.Code != 404 {

@@ -121,7 +121,7 @@ func TestQueueListShowsCountsAndState(t *testing.T) {
 	e.addTask(t, "a", nil)
 	e.addTask(t, "b", func(tk *tasks.Task) { tk.Status = tasks.StatusFailed })
 	e.addTask(t, "c", func(tk *tasks.Task) { tk.Status = tasks.StatusFailed })
-	if w := e.post("/ui/queue/pause", url.Values{"queue": {e.q.ID}}); w.Code != http.StatusSeeOther {
+	if w := e.post("/ui/queue/pause", url.Values{"queue": []string{e.q.ID}}); w.Code != http.StatusSeeOther {
 		t.Fatalf("pause: %d", w.Code)
 	}
 	body := e.get("/ui/queues").Body.String()
@@ -178,7 +178,7 @@ func TestTaskActions(t *testing.T) {
 	})
 	repo := tasks.NewRepository(e.db.Conn())
 
-	w := e.post("/ui/queue/tasks/retry", url.Values{"queue": {e.q.ID}, "task": {"a"}, "next": {"/ui/task?x=1"}})
+	w := e.post("/ui/queue/tasks/retry", url.Values{"queue": []string{e.q.ID}, "task": []string{"a"}, "next": []string{"/ui/task?x=1"}})
 	if w.Code != http.StatusSeeOther || !strings.HasPrefix(w.Header().Get("Location"), "/ui/task?") {
 		t.Fatalf("retry redirect: %d %q", w.Code, w.Header().Get("Location"))
 	}
@@ -190,12 +190,12 @@ func TestTaskActions(t *testing.T) {
 		t.Fatal("retried task is not due (Run now on a FAILED task used to do nothing)")
 	}
 
-	e.post("/ui/queue/tasks/delete", url.Values{"queue": {e.q.ID}, "task": {"a"}})
+	e.post("/ui/queue/tasks/delete", url.Values{"queue": []string{e.q.ID}, "task": []string{"a"}})
 	if got, _ := repo.Get(name); got != nil {
 		t.Fatal("task not deleted")
 	}
 	// Deleting again surfaces an error message instead of failing silently.
-	w = e.post("/ui/queue/tasks/delete", url.Values{"queue": {e.q.ID}, "task": {"a"}})
+	w = e.post("/ui/queue/tasks/delete", url.Values{"queue": []string{e.q.ID}, "task": []string{"a"}})
 	if !strings.Contains(w.Header().Get("Location"), "error=") {
 		t.Fatalf("missing error redirect: %q", w.Header().Get("Location"))
 	}
@@ -205,12 +205,12 @@ func TestPurgeAndDeleteQueue(t *testing.T) {
 	e := newUIEnv(t)
 	e.addTask(t, "a", nil)
 	e.addTask(t, "b", nil)
-	w := e.post("/ui/queue/purge", url.Values{"queue": {e.q.ID}, "next": {"/ui/queues"}})
+	w := e.post("/ui/queue/purge", url.Values{"queue": []string{e.q.ID}, "next": []string{"/ui/queues"}})
 	if !strings.Contains(w.Header().Get("Location"), "Purged+2") {
 		t.Fatalf("purge location: %q", w.Header().Get("Location"))
 	}
 	e.addTask(t, "c", nil)
-	e.post("/ui/queue/delete", url.Values{"queue": {e.q.ID}})
+	e.post("/ui/queue/delete", url.Values{"queue": []string{e.q.ID}})
 	if n, _ := tasks.NewRepository(e.db.Conn()).Count(e.q.ID, ""); n != 0 {
 		t.Fatalf("%d tasks left after queue delete", n)
 	}
@@ -221,15 +221,15 @@ func TestPurgeAndDeleteQueue(t *testing.T) {
 
 func TestCreateQueueValidation(t *testing.T) {
 	e := newUIEnv(t)
-	w := e.post("/ui/queues", url.Values{"name": {"bad name"}})
+	w := e.post("/ui/queues", url.Values{"name": []string{"bad name"}})
 	if !strings.Contains(w.Header().Get("Location"), "error=") {
 		t.Fatalf("invalid name accepted: %q", w.Header().Get("Location"))
 	}
-	w = e.post("/ui/queues", url.Values{"project": {"p"}, "location": {"l"}, "name": {"q"}})
+	w = e.post("/ui/queues", url.Values{"project": []string{"p"}, "location": []string{"l"}, "name": []string{"q"}})
 	if !strings.Contains(w.Header().Get("Location"), "already+exists") {
 		t.Fatalf("duplicate: %q", w.Header().Get("Location"))
 	}
-	w = e.post("/ui/queues", url.Values{"name": {"fresh"}, "max_dispatches_per_second": {"7"}, "max_concurrent_dispatches": {"3"}})
+	w = e.post("/ui/queues", url.Values{"name": []string{"fresh"}, "max_dispatches_per_second": []string{"7"}, "max_concurrent_dispatches": []string{"3"}})
 	if !strings.Contains(w.Header().Get("Location"), "notice=") {
 		t.Fatalf("create: %q", w.Header().Get("Location"))
 	}
@@ -249,7 +249,7 @@ func TestSafeNext(t *testing.T) {
 		"":                  "/ui/queues",
 		"/ui/\\evil":        "/ui/queues",
 	} {
-		r := httptest.NewRequest("POST", "/x", strings.NewReader(url.Values{"next": {next}}.Encode()))
+		r := httptest.NewRequest("POST", "/x", strings.NewReader(url.Values{"next": []string{next}}.Encode()))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		if got := safeNext(r, "/ui/queues"); got != want {
 			t.Errorf("safeNext(%q) = %q, want %q", next, got, want)
